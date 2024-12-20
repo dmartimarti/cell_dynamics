@@ -9,31 +9,10 @@ from plotly.subplots import make_subplots
 import plotly.graph_objects as go
 from itertools import product
 import seaborn as sns
+from .analyzers import GrowthAnalyzer
 
 
 # functions
-def read_design(file_input):
-    """
-        Reads an Excel from a path with the main design of the experiment.
-        It should contain relevant metadata.
-
-        Parameters 
-        ----------
-        file_input : str
-            Path to the Excel file with the main design of the experiment.
-
-        Returns
-        -------
-        df : pandas.DataFrame
-            A pandas DataFrame with the main design of the experiment.
-    """
-
-    xlfile = pd.read_excel(file_input,
-                           sheet_name='Design',
-                           engine='openpyxl')
-    return xlfile
-
-
 def get_sheet_names(file):
     """
     Function that gets the sheet names from an Excel file
@@ -73,73 +52,6 @@ def check_if_equal(list_1, list_2):
     return set(list_1).issubset(set(list_2))
 
 
-def fix_times(times):
-    """
-    Takes a vector with the raw times values from the txt and fixes them into a proper shape and rounded values
-    :param times: vector of times from the txt file from biospa
-    :return: a vector of fixed times
-    """
-    times = [time_to_sec(val) for val in times if val not in ['Time', '', '0:00:00']]
-    length = len(times)
-    timestep = round_to(float(times[-1] - times[0]) / (length - 1), 1)
-    timemax_min = int((length - 1) * timestep / 60)  # time max in minutes
-    time_span = np.linspace(0, timemax_min * 60, length, dtype=np.dtype(int))
-    return time_span
-
-def get_well_names(num_letters, num_numbers):
-    """
-    Function that returns a list of all possible combinations of letters (from A to a specified number) and numbers (from 1 to a specified number)
-    Parameters
-    ----------
-    num_letters : int
-        The number of letters to be used
-    num_numbers : int
-        The number of numbers to be used
-    Returns
-    -------
-    list
-        A list of all possible combinations of letters (from A to a specified number) and numbers (from 1 to a specified number)
-    """
-    # get the letters
-    letters = [chr(i) for i in range(65, 65+num_letters)]
-    # get the numbers
-    numbers = [str(i) for i in range(1, num_numbers+1)]
-    # get all the combinations of letters and numbers
-    well_names = [i+j for i, j in product(letters, numbers)]
-    return well_names
-
-def biospa_text_opener(file):
-    """
-    Main function for opening the txt files from biospa
-    :param file: a path to the txt file corresponding to a single plate in your computer
-    :return: a tuple of a pandas dataframe, a vector of temperatures, and an OD value for the plate
-    """
-    # opens the file
-    with open(file, 'r', errors='ignore') as f:
-        contents = f.readlines()
-    # save the OD
-    od = contents[0].split('\n')[0]
-    
-    # get the index of the line where the times start
-    for i, line in enumerate(contents):
-        if line[:4] == 'Time':
-            time_line = i
-            break
-    
-    # save the times
-    times = contents[time_line].split('\t')[1:-1]
-    times = fix_times(times)  # this fixes size and values for the times, rounding them
-    # save temperatures
-    temps_raw = contents[3].split('\t')[1:-1]
-    temps = [float(temp) for temp in temps_raw if temp not in ['0.0', '']]
-    temps = np.array(temps)
-    # save the useful data info
-    temp_df = contents[4:len(contents)]
-    # convert it to a pandas object
-    df = df_beautify(temp_df, times=times)
-
-    return df, temps, od
-
 
 def df_beautify(txt_object, times):
     """
@@ -168,7 +80,7 @@ def df_beautify(txt_object, times):
     # sort the list of letters and numbers
     letters = sorted(list(set(letters)))
     numbers = sorted(list(set(numbers)))
-    combinations = get_well_names(len(letters), len(numbers))
+    combinations = GrowthAnalyzer.get_well_names(len(letters), len(numbers))
 
     # check if there is a missing well, and if so, add it with 0 values
     if len(df.index) != len(combinations):
@@ -200,42 +112,6 @@ def check_nm(nm):
         print(f'Wavelength of the experiment is: {nm[0]}')
 
 
-def round_to(n, precision):
-    """
-    Function from the original script to round numbers to a desired precision
-    (Need to check if I really need this)
-    :param n: a float
-    :param precision: an integer
-    :return:
-    """
-    # Round a number to desired precision
-    correction = 0.5 if n >= 0 else -0.5
-    return int(n / precision + correction) * precision
-
-
-def time_to_sec(time_str):
-    """
-    Converts a time string from reading the file with biospa_text_opener and converts it to seconds
-    :param time_str: a time string like '0:00:30'
-    :return: an integer of the total seconds (30 in the case of the example)
-    """
-    h, m, s = time_str.split(':')
-    seconds = int(s) + 60 * int(m) + 3600 * int(h)
-    return seconds
-
-
-def set_series2min(x, thres: float = 0.0):
-    """
-    This function takes a pandas series and clip the values between 0 and Inf
-    :param x: a Pandas Series object
-    :param thres: threshold to use as a minimum value
-    :return: returns a numpy array without negative values
-    """
-    x = x.to_numpy()
-    x = np.clip(x, thres, np.inf)
-    return x
-
-
 def growth(x, A, lam, u):
     """
     Parametric logistic growth model.
@@ -249,22 +125,6 @@ def growth(x, A, lam, u):
     return A / (1 + np.exp((4 * u / A) * (lam - x) + 2))
 
 
-def check_outliers_temps(temp_vect, thres: float = 0.1):
-    """
-    Checks if there are outliers in the temperature vector
-    :param temp_vect: a numpy array of temperatures
-    :param thres: the threshold to detect outliers, in proportion of the average value (0.1 by default)
-    :return: a boolean, and the numpy array of the possible outliers
-    """
-    temps_av = np.average(temp_vect) * thres
-    min_temp, max_temp = np.average(temp_vect) - temps_av, np.average(temp_vect) + temps_av
-    filter_temps = temp_vect[np.logical_and(temp_vect > max_temp, temp_vect < min_temp)]
-    if len(filter_temps) == 0:
-        return False
-    else:
-        return True, filter_temps
-
-
 def integral(biospa_df, position: str):
     var = biospa_df.loc[position].to_list()
 
@@ -274,66 +134,6 @@ def integral(biospa_df, position: str):
     return np.trapz(y=var)
 
 
-def get_time_h(df):
-    # time_t is the time from the experiment in format 0:00:00
-    time_t = df.columns.to_list()
-    time_t = [t+52 for t in time_t]
-    # length is the number of time points
-    length = len(time_t)
-    # timestep is the time between each time point
-    timestep = round_to(float(time_t[-1] - time_t[0]) / (length - 1), 1)
-    # timemax_min is the total time in minutes
-    timemax_min = int((length - 1) * timestep / 60)  # time max in mins
-    # timemax_remmin is the remainder of minutes
-    timemax_h, timemax_remmin = divmod(timemax_min, 60)
-    # time_span is the time in seconds
-    time_span = np.linspace(0, timemax_min * 60, length, dtype=np.dtype(int))
-    # time_h is the time in hours
-    time_h = time_span / 3600.0
-    return length, time_h, time_span
-
-
-# def plot_individual_plate(data, title, out_name, time_h, save=False):
-#     """
-#     Plots the data as a grid of 8x12. It takes a Pandas dataframe as input with Wells as index and time as columns.
-
-#     :param data: data to plot
-#     :param title: title of the plot
-#     :param out_name: name of the output file
-#     :param save: if True, saves the plot as a pdf file
-#     """
-
-#     # get index from data and separate it into numbers and letters, save only a unique list of both
-#     plt.ioff()
-#     mplstyle.use('fast')
-#     index = data.index.to_list()
-#     letters = list(set([i[0] for i in index]))
-#     numbers =list(set([int(i[1:]) for i in index]))
-
-#     # sort the lists
-#     letters.sort()
-#     numbers.sort()
-
-#     let_len = len(letters)
-#     num_len = len(numbers)
-
-#     # plot data as an 8x12 grid, all plots share the same y and x axis, place a unique axis for each row and column
-#     # print numbers as the general column name and letters as the general row name
-#     fig, axs = plt.subplots(let_len, num_len, sharex=True, sharey=True, figsize=(num_len, let_len))
-#     fig.suptitle(title)
-#     for ax, col in zip(axs[0], numbers):
-#         ax.set_title(col)
-#     for ax, row in zip(axs[:, len(numbers)-1], letters):
-#         ax.set_ylabel(row, rotation=0, size='large', labelpad=10)
-#         ax.yaxis.set_label_position("right")
-#     for i, ax in enumerate(axs.flat):
-#         ax.plot(time_h, data.iloc[i])
-#         ax.set_xticks(np.arange(0, 24, 12))
-#         ax.set_yticks(np.arange(0, max(data.max(axis=1)), 0.3))
-    
-#     if save:
-#         # save the plot in pdf format
-#         plt.savefig(f'{out_name}.pdf', format='pdf')
 
 
 def plot_individual_plate_plotly(data, title, out_name, time_h, save=False):

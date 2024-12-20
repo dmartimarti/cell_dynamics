@@ -15,11 +15,13 @@ __copyright__ = 'Copyright (C) 2022 Daniel Martínez Martínez'
 __license__ = 'MIT License'
 __email__ = 'dmartimarti **AT** gmail.com'
 __maintainer__ = 'Daniel Martínez Martínez'
-__status__ = 'alpha'
-__date__ = 'Nov 2024'
-__version__ = '0.7.0'
+__status__ = 'beta'
+__date__ = 'Dec 2024'
+__version__ = '0.8.0'
 
 from functions.functions import *
+from functions.readers import ExperimentReader
+from functions.analyzers import GrowthAnalyzer
 import argparse
 import pathlib
 import numpy as np
@@ -99,24 +101,30 @@ ROOT = args.input
 OUTPUT = args.output
 n_threads = int(args.threads)
 
+
+reader = ExperimentReader(os.path.join(ROOT, args.file))
+design = reader.read_design()
+
+analyzer = GrowthAnalyzer(design, ROOT)  # Pass necessary arguments
+
 # this function calculates the AUC of the OD time series
 def out_auc_function(file, mode):
     # open the info about df, temperatures, times and OD
-    df, temps, OD = biospa_text_opener(os.path.join(ROOT, file))
+    df, temps, OD = analyzer.biospa_text_opener(os.path.join(ROOT, file))
     OD = OD[3:]
 
-    if check_outliers_temps(temps):
+    if analyzer.check_outliers_temps(temps):
         raise Exception("There are outliers in the temperatures, check your experiment!")
     else:
         pass
 
     # get time info
-    length, time_h, time_span = get_time_h(df)
+    length, time_h, time_span = analyzer.get_time_h(df)
 
     ### Fix and interpolate the data
     window = int(round(length / 10, 0))
     # make all the time series start from the same point (0 usually)
-    adj_df = df.apply(lambda row: pd.Series(set_series2min(row - np.mean(row[:window]), 0.0), index=time_span), axis=1)
+    adj_df = df.apply(lambda row: pd.Series(analyzer.set_series2min(row - np.mean(row[:window]), 0.0), index=time_span), axis=1)
 
     # smooth the data from adj_df using a wiener filter
     with np.errstate(divide='ignore', invalid='ignore'): # ignore the warnings from wiener filter
@@ -173,7 +181,7 @@ def main():
         start_method = 'fork'
 
     # read Excel file with Pandas
-    design = read_design(os.path.join(ROOT, args.file))
+    # design = analyzer.read_design(os.path.join(ROOT, args.file))
 
     # first, check if the files from the file and your computer are the same
     des_files = design['File'].to_list()
@@ -222,7 +230,7 @@ def main():
     with get_context(start_method).Pool(n_threads) as p:
         # user starmap to pass multiple arguments to the function
         out_auc_df = pd.concat(list(tqdm(p.starmap(
-                                                out_auc_function, 
+                                                analyzer.calculate_auc, 
                                                 zip(design.File.to_list(), 
                                                 # modify this list to pass different arguments to the function
                                                 ['AUC']*len(design.File.to_list()))), 
@@ -234,7 +242,7 @@ def main():
     with get_context(start_method).Pool(n_threads) as p:
         # user starmap to pass multiple arguments to the function
         out_time_df = pd.concat(list(tqdm(p.starmap(
-                                                out_auc_function, 
+                                                analyzer.calculate_auc, 
                                                 zip(design.File.to_list(), 
                                                 # modify this list to pass different arguments to the function
                                                 ['timeseries']*len(design.File.to_list()))), 
@@ -252,7 +260,7 @@ def main():
             for pat in pattern_vars:
                 pattern_media = pd.read_excel(os.path.join(ROOT, pattern), pat)
                 pattern_media = pattern_media.set_index(pattern_media.columns[0])
-                well = get_well_names(pattern_media.shape[0], pattern_media.shape[1])
+                well = analyzer.get_well_names(pattern_media.shape[0], pattern_media.shape[1])
                 pattern_media_vec = pattern_media.values.flatten().tolist()
                 pattern_media_df = pd.DataFrame({'Well': well, f'{pat}': pattern_media_vec, 'Pattern': pattern})
                 pattern_df = pd.concat([pattern_df, pattern_media_df], axis=1)
