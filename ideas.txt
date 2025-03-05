@@ -20,3 +20,7 @@ Multi-variate tests:
     - PCA
     - t-SNE
     - Clustering with K-means? (useful when we don't know about the samples?)
+
+
+# use this to mirror this repo into the Cabreiro lab repo
+git push --mirror https://github.com/Cabreiro-Lab/cell_dynamics.git

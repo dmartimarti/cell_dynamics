@@ -125,7 +125,7 @@ class GrowthAnalyzer:
         :param times: vector of times from the txt file from biospa
         :return: a vector of fixed times
         """
-        times = [self.time_to_sec(val) for val in times if val not in ['Time', '', '0:00:00']]
+        times = [self.time_to_sec(val) for val in times if val not in ['Time', '']]
         length = len(times)
         timestep = self.round_to(float(times[-1] - times[0]) / (length - 1), 1)
         timemax_min = int((length - 1) * timestep / 60)  # time max in minutes

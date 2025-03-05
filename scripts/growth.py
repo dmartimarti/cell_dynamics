@@ -84,7 +84,7 @@ class bcolors:
 
 class AnalysisVars():
     def __init__(self, analysis_vars):
-        self.grouping_variable = analysis_vars.grouping_variable.dropna().to_list()[0]
+        self.grouping_variable = analysis_vars.grouping_variable.dropna().to_list()
         self.condition = analysis_vars.condition.dropna().to_list()[0] 
         self.all_vars = self.grouping_variable + [self.condition]
     
