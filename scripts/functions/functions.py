@@ -10,6 +10,7 @@ import plotly.graph_objects as go
 from itertools import product
 import seaborn as sns
 from .analyzers import GrowthAnalyzer
+from scipy.optimize import curve_fit
 
 
 # functions
@@ -123,6 +124,62 @@ def growth(x, A, lam, u):
     :return: returns the model to be optimised with curve_fit from scipy
     """
     return A / (1 + np.exp((4 * u / A) * (lam - x) + 2))
+
+
+def gompertz(x, A, lam, u):
+    """
+    Gompertz growth model.
+    Ref: https://www.jstatsoft.org/article/download/v033i07/367
+    :param x: series values
+    :param A: carrying capacity or max growth
+    :param lam: length of lag phase
+    :param u: growth rate
+    :return: returns the model to be optimised with curve_fit from scipy
+    """
+    return A * np.exp(-np.exp(u * np.exp(1) / A * (lam - x) + 1))
+
+
+def calculate_aic(n, sse, k):
+    """
+    Calculates the Akaike Information Criterion (AIC).
+    :param n: number of data points
+    :param sse: sum of squared errors
+    :param k: number of parameters
+    :return: AIC value
+    """
+    if sse == 0:
+        return -np.inf
+    else:
+        return n * np.log(sse / n) + 2 * k
+
+
+def model_selection(x, y, models):
+    """
+    Selects the best model based on AIC.
+    :param x: x data
+    :param y: y data
+    :param models: dictionary of models to be tested
+    :return: best model name, parameters and aic
+    """
+    best_model = None
+    best_aic = np.inf
+    best_params = None
+
+    for name, model in models.items():
+        try:
+            params, _ = curve_fit(model, x, y)
+            y_fit = model(x, *params)
+            sse = np.sum((y - y_fit) ** 2)
+            aic = calculate_aic(len(y), sse, len(params))
+
+            if aic < best_aic:
+                best_aic = aic
+                best_model = name
+                best_params = params
+        except RuntimeError:
+            pass
+
+    return best_model, best_params, best_aic
 
 
 def integral(biospa_df, position: str):
