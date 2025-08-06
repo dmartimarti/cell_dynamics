@@ -33,6 +33,7 @@ from multiprocessing import get_context
 import sys
 
 from scipy import interpolate as ip
+from sklearn.decomposition import PCA
 
 # start parser
 parser = argparse.ArgumentParser()
@@ -68,6 +69,13 @@ parser.add_argument('-v',
 parser.add_argument('--parametric',
                     action='store_true',
                     help='Flag to enable parametric modelling.')
+parser.add_argument('--pca',
+                    action='store_true',
+                    help='Flag to enable PCA analysis.')
+parser.add_argument('--pca_color',
+                    type=str,
+                    default=None,
+                    help='Variable to color the PCA plot by.')
 
 
 args = parser.parse_args()
@@ -348,6 +356,42 @@ def main():
         # merge the parametric_df with the out_auc_df
         out_auc_df = out_auc_df.merge(parametric_df, on=['File', 'Well'], how='left')
         out_auc_df.to_csv(os.path.join(ROOT, OUTPUT, 'Summary.csv'), index=False)
+
+    # PCA ANALYSIS
+    if args.pca:
+        print(f'\n{bcolors.OKCYAN}Starting the PCA analysis...{bcolors.ENDC}\n')
+
+        # create a folder for the PCA plots
+        pca_path = os.path.join(ROOT, OUTPUT, 'Plots', 'PCA')
+        if not os.path.exists(pca_path):
+            os.makedirs(pca_path)
+        else:
+            print('The PCA folder already exists. I will overwrite the files.')
+
+        # get the smoothed data
+        w_filt_df = out_time_df[out_time_df.Data.str.endswith('_f')]
+
+        # get the data to be used in the PCA
+        pca_data = w_filt_df[w_filt_df.columns[4:]].values
+
+        # perform PCA
+        pca = PCA(n_components=2)
+        pca_result = pca.fit_transform(pca_data)
+
+        # create a dataframe with the PCA results
+        pca_df = pd.DataFrame(data=pca_result, columns=['PC1', 'PC2'])
+
+        # merge with the metadata
+        pca_df = pd.concat([w_filt_df.reset_index(drop=True), pca_df], axis=1)
+
+        # plot the results
+        plt.figure(figsize=(10, 10))
+        sns.scatterplot(x='PC1', y='PC2', data=pca_df, hue=args.pca_color, palette='viridis')
+        plt.title('PCA of growth curves')
+        plt.xlabel(f'PC1 ({pca.explained_variance_ratio_[0]:.2f})')
+        plt.ylabel(f'PC2 ({pca.explained_variance_ratio_[1]:.2f})')
+        plt.savefig(os.path.join(pca_path, 'PCA_plot.pdf'))
+        plt.close()
 
 
     ### PLOT THE TIMESERIES
