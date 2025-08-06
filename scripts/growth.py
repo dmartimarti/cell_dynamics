@@ -65,6 +65,9 @@ parser.add_argument('-v',
                     '--version',
                     action='version',
                     version=f'%(prog)s v.{__version__} {__status__}')
+parser.add_argument('--parametric',
+                    action='store_true',
+                    help='Flag to enable parametric modelling.')
 
 
 args = parser.parse_args()
@@ -290,6 +293,61 @@ def main():
     out_auc_df.to_csv(os.path.join(ROOT, OUTPUT, 'Summary.csv'), index=False)
     # save the timeseries file in the output folder as a csv file
     out_time_df.to_csv(os.path.join(ROOT, OUTPUT, 'Timeseries.csv'), index=False)
+
+
+    # PARAMETRIC MODELLING
+    if args.parametric:
+        print(f'\n{bcolors.OKCYAN}Starting the parametric modelling...{bcolors.ENDC}\n')
+
+        # create a folder for the parametric plots
+        parametric_path = os.path.join(ROOT, OUTPUT, 'Plots', 'Parametric')
+        if not os.path.exists(parametric_path):
+            os.makedirs(parametric_path)
+        else:
+            print('The Parametric folder already exists. I will overwrite the files.')
+
+        models = {'logistic': growth, 'gompertz': gompertz}
+
+        # get the timeseries data for the smoothed data
+        time_h = [int(i) for i in out_time_df.columns if is_number(i)]
+        time_h = np.array(time_h)/60/60
+
+        # get the smoothed data
+        w_filt_df = out_time_df[out_time_df.Data.str.endswith('_f')]
+
+        # create a new dataframe to store the results
+        parametric_df = pd.DataFrame()
+
+        for index, row in tqdm(w_filt_df.iterrows(), total=w_filt_df.shape[0]):
+            y = row[w_filt_df.columns[4:]].values
+            x = time_h
+
+            best_model, best_params, best_aic = model_selection(x, y, models)
+
+            if best_params is not None:
+                # create a dictionary with the results
+                results = {'File': row['File'],
+                           'Well': row['Well'],
+                           'model': best_model,
+                           'A': best_params[0],
+                           'lam': best_params[1],
+                           'u': best_params[2],
+                           'aic': best_aic}
+                # append the results to the dataframe
+                parametric_df = parametric_df.append(results, ignore_index=True)
+
+                # plot the results
+                plt.figure()
+                plt.plot(x, y, 'o', label='data')
+                plt.plot(x, models[best_model](x, *best_params), '-', label='fit')
+                plt.legend()
+                plt.title(f'{row.File}_{row.Well}')
+                plt.savefig(os.path.join(parametric_path, f'{row.File}_{row.Well}.pdf'))
+                plt.close()
+
+        # merge the parametric_df with the out_auc_df
+        out_auc_df = out_auc_df.merge(parametric_df, on=['File', 'Well'], how='left')
+        out_auc_df.to_csv(os.path.join(ROOT, OUTPUT, 'Summary.csv'), index=False)
 
 
     ### PLOT THE TIMESERIES
