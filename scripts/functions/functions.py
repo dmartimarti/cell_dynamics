@@ -66,7 +66,7 @@ def df_beautify(txt_object, times):
     df = df.drop(0, axis=1)
     df.drop(df.columns[len(df.columns) - 1], axis=1, inplace=True)  # remove last column as it's a \n
     df = df.dropna()  # remove empty rows
-    df = df.replace(r'^\s*$', np.NaN, regex=True)  # replace empty values (from 0:00:00 time values) for NaN
+    df = df.replace(r'^\s*$', np.nan, regex=True)  # replace empty values (from 0:00:00 time values) for NaN
     df.dropna(axis=1, inplace=True)  # remove empty columns
     df.columns = times  # put times as column names
     df = df.apply(pd.to_numeric)  # change type to numeric

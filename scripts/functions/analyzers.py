@@ -3,8 +3,11 @@ import numpy as np
 from scipy import signal
 from scipy import interpolate as ip
 from itertools import product
-import os 
+import os
 import pandas as pd
+from scipy.optimize import curve_fit
+import warnings
+from scipy.optimize import OptimizeWarning
 
 
 class GrowthAnalyzer:
@@ -57,7 +60,7 @@ class GrowthAnalyzer:
         df = df.drop(0, axis=1)
         df.drop(df.columns[len(df.columns) - 1], axis=1, inplace=True)  # remove last column as it's a \n
         df = df.dropna()  # remove empty rows
-        df = df.replace(r'^\s*$', np.NaN, regex=True)  # replace empty values (from 0:00:00 time values) for NaN
+        df = df.replace(r'^\s*$', np.nan, regex=True)  # replace empty values (from 0:00:00 time values) for NaN
         df.dropna(axis=1, inplace=True)  # remove empty columns
         df.columns = times  # put times as column names
         df = df.apply(pd.to_numeric)  # change type to numeric
@@ -187,6 +190,21 @@ class GrowthAnalyzer:
         x = np.clip(x, thres, np.inf)
         return x
 
+    @staticmethod
+    def gompertz_model(t, A, mu, t_lag):
+        return A * np.exp(-np.exp(mu * np.exp(1) / A * (t_lag - t) + 1))
+
+    def fit_gompertz(self, t, y):
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
+            warnings.simplefilter("ignore", OptimizeWarning)
+            with np.errstate(over='ignore', divide='ignore', invalid='ignore'):
+                try:
+                    params, _ = curve_fit(self.gompertz_model, t, y, p0=[max(y), 0.1, 1], maxfev=10000)
+                    return params
+                except RuntimeError:
+                    return [np.nan, np.nan, np.nan]
+
     def calculate_auc(self, file, mode):
         """
         Calculates the AUC of the OD time series.
@@ -227,9 +245,15 @@ class GrowthAnalyzer:
         with np.errstate(divide='ignore', invalid='ignore'):
             auc_log2 = np.log2(auc)
 
+        gompertz_params = w_filt.apply(lambda row: self.fit_gompertz(time_h, row), axis=1)
+        gompertz_df = pd.DataFrame(gompertz_params.to_list(), columns=['A', 'mu', 't_lag'], index=w_filt.index)
+
         auc_df = pd.DataFrame({f'File': file, f'{OD}_f_AUC': auc, f'{OD}_f_logAUC': auc_log2, f'{OD}_dt_Max': max_slope})
         auc_df.reset_index(inplace=True)
         auc_df = auc_df.rename(columns = {0:'Well'})
+
+        # Merge with Gompertz parameters
+        auc_df = auc_df.merge(gompertz_df, left_on='Well', right_index=True)
 
         if mode == 'AUC':
             return auc_df
