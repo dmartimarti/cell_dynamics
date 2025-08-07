@@ -1,7 +1,7 @@
 # Default ignored files
 /shelf/
 /workspace.xml
-./test_data
+# ./test_data
 .idea/
 split_fasta.py
 .DS_Store
