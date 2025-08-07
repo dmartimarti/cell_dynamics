@@ -1,14 +1,16 @@
+# analyzers.py
 import numpy as np
-import pandas as pd
 from scipy import signal
+from scipy import interpolate as ip
 from itertools import product
-import os
-from scipy.interpolate import UnivariateSpline
+import os 
+import pandas as pd
 
 
-class DataProcessor:
-    def __init__(self):
-        pass
+class GrowthAnalyzer:
+    def __init__(self, design, root):
+        self.design = design
+        self.root = root
 
     def biospa_text_opener(self, file):
         """
@@ -185,12 +187,12 @@ class DataProcessor:
         x = np.clip(x, thres, np.inf)
         return x
 
-    def smooth_data(self, file, root):
+    def calculate_auc(self, file, mode):
         """
-        Smooths the data using a Wiener filter.
+        Calculates the AUC of the OD time series.
         """
         # open the info about df, temperatures, times and OD
-        df, temps, OD = self.biospa_text_opener(os.path.join(root, file))
+        df, temps, OD = self.biospa_text_opener(os.path.join(self.root, file))
         OD = OD[3:]
 
         if self.check_outliers_temps(temps):
@@ -212,7 +214,56 @@ class DataProcessor:
         # fix the NaN rows and substitute them with 0
         w_filt = w_filt.fillna(0)
 
-        growth_rates = w_filt.apply(lambda row: pd.Series(UnivariateSpline(time_h, row, s=0).derivative(1)(time_h), index=time_span),
+        growth_rates = w_filt.apply(lambda row: pd.Series(ip.UnivariateSpline(time_h, row, s=0).derivative(1)(time_h), index=time_span),
+                        axis=1)
+
+        max_slope = growth_rates.apply(lambda row: pd.Series(row.rolling(window).mean().max(), index=time_span), axis=1).iloc[:,0]
+
+        # calculate AUC from the smoothed data
+        auc = w_filt.apply(lambda row: pd.Series(np.trapz(row, time_h), index=time_span), axis=1).iloc[:,0]
+
+        ######## prepare the Output.csv
+        # remove RuntimeWarning: divide by zero encountered in log2
+        with np.errstate(divide='ignore', invalid='ignore'):
+            auc_log2 = np.log2(auc)
+
+        auc_df = pd.DataFrame({f'File': file, f'{OD}_f_AUC': auc, f'{OD}_f_logAUC': auc_log2, f'{OD}_dt_Max': max_slope})
+        auc_df.reset_index(inplace=True)
+        auc_df = auc_df.rename(columns = {0:'Well'})
+
+        if mode == 'AUC':
+            return auc_df
+        elif mode == 'timeseries':
+            return self.smooth_data(file)
+
+    def smooth_data(self, file):
+        """
+        Smooths the data using a Wiener filter.
+        """
+        # open the info about df, temperatures, times and OD
+        df, temps, OD = self.biospa_text_opener(os.path.join(self.root, file))
+        OD = OD[3:]
+
+        if self.check_outliers_temps(temps):
+            raise Exception("There are outliers in the temperatures, check your experiment!")
+        else:
+            pass
+
+        # get time info
+        length, time_h, time_span = self.get_time_h(df)
+
+        ### Fix and interpolate the data
+        window = int(round(length / 10, 0))
+        # make all the time series start from the same point (0 usually)
+        adj_df = df.apply(lambda row: pd.Series(self.set_series2min(row - np.mean(row[:window]), 0.0), index=time_span), axis=1)
+
+        # smooth the data from adj_df using a wiener filter
+        with np.errstate(divide='ignore', invalid='ignore'): # ignore the warnings from wiener filter
+            w_filt = adj_df.apply(lambda row: pd.Series(signal.wiener(row, 5), index=time_span), axis=1)
+        # fix the NaN rows and substitute them with 0
+        w_filt = w_filt.fillna(0)
+
+        growth_rates = w_filt.apply(lambda row: pd.Series(ip.UnivariateSpline(time_h, row, s=0).derivative(1)(time_h), index=time_span),
                         axis=1)
 
         # get the timeseries

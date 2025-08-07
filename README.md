@@ -17,12 +17,11 @@ The script is written in Python 3.10 and it is recommended to use a virtual envi
 - seaborn
 - scipy
 - openpyxl
-- scikit-learn
 
 I highly recommed to create a new conda environment and install the libraries with the following command:
 
 ```bash
-conda create -n <env_name> python=3.10 numpy pandas plotly tqdm matplotlib seaborn scipy openpyxl scikit-learn
+conda create -n <env_name> python=3.10 numpy pandas plotly tqdm matplotlib seaborn scipy openpyxl
 ```
 
 Activate the new environment.
@@ -46,7 +45,7 @@ cd <path_to_your_local_folder>
 git clone https://github.com/Cabreiro-Lab/cell_dynamics
 ```
 
-The scripts are in the `scripts` folder, which contains the main script (`growth.py`), and a folder with the classes. If you want to run the script, you need to copy `growth.py` and the classes folder to the folder where you have your data. **However, if you want to run it anywhere**, keep reading.
+The scripts are in the `scripts` folder, which contains the main script (`growth.py`), and a folder with necessary functions. Right now there's only one extra script in there, but there might be more in the future. If you want to run the script, you need to copy `growth.py` and the functions folder to the folder where you have your data. **However, if you want to run it anywhere**, keep reading.
 
 ## OPTIONAL: make the script executable anywhere
 
@@ -58,10 +57,10 @@ If you want to make this script available from anywhere, you can add the path to
 echo "export PATH=$PATH:~/Documents/cell_dynamics/scripts" >> ~/.zshrc
 ```
 
-Add also the classes folder:
+Add also the functions folder:
     
 ```bash
-echo "export PATH=$PATH:~/Documents/cell_dynamics/scripts/classes" >> ~/.zshrc
+echo "export PATH=$PATH:~/Documents/cell_dynamics/scripts/functions" >> ~/.zshrc
 ```
 
 Then go to the scripts folder and make the main script executable:
@@ -77,7 +76,7 @@ This should make the script available from anywhere in your computer. You might 
 
 ## Usage
 
-The main script is named `growth.py`. The script is called with the following command:
+The main script is named `growth.py` and depends on the `functions.py` file. The script is called with the following command:
 
 ```bash
 python growth.py -i <input_folder> -o <output_folder> -t <threads> 
@@ -89,9 +88,6 @@ The script can be called with the following arguments:
 - `-o` or `--output`: Path to the output folder. The script will create a folder for plots and another for the csv files.
 - `-t` or `--threads`: Number of threads to use. 
 - `-w` or `--windows`: Specify wheter you are using Windows to use an alternative multiprocessing method.
-- `--parametric`: Flag to enable parametric modelling.
-- `--pca`: Flag to enable PCA analysis.
-- `--pca_color`: Variable to color the PCA plot by.
 
 **IMPORTANT**: If you are using **Windows**, make sure you specify the `-w` argument. The script will use an alternative multiprocessing method that works in Windows.Otherwise, if you are using a Mac with **M1 chip**, you don't need to specify the `-w` argument.
 
@@ -118,18 +114,6 @@ It will output 3 types of plots:
 - A timeseries plot with raw values that will be named just as the input file name and the wave length, e.g., *plate_1_595nm.pdf*
 - A timeseries plot a Wiener smoothing filter applied, named as the input file name and the wave length + '_f', e.g., *plate_1_595nm_f.pdf*
 - A plot of the growth rates per time, named as the input file name and the wave length + '_dt', e.g., *plate_1_595nm_dt.pdf*
-
-If the `--parametric` flag is used, the script will also output:
-- A `Parametric` folder inside the `Plots` folder, containing plots of the fitted curves for each well.
-- The `Summary.csv` file will be updated with the following columns:
-    - `model`: The name of the best-fitting model (e.g., `logistic`, `gompertz`).
-    - `A`: The carrying capacity.
-    - `lam`: The lag phase duration.
-    - `u`: The maximum growth rate.
-    - `aic`: The Akaike Information Criterion of the best-fitting model.
-
-If the `--pca` flag is used, the script will also output:
-- A `PCA` folder inside the `Plots` folder, containing a PCA scores plot.
 
 The same variables can be found in the AUCs and timeseries .csv files as column names. 
 
