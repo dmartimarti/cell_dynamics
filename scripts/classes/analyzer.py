@@ -1,8 +1,10 @@
+from scipy import signal
 import numpy as np
 import pandas as pd
 from scipy.optimize import curve_fit
+from scipy.interpolate import UnivariateSpline
 from sklearn.decomposition import PCA
-
+import os
 
 class GrowthAnalyzer:
     def __init__(self):
@@ -36,8 +38,7 @@ class GrowthAnalyzer:
             w_filt = adj_df.apply(lambda row: pd.Series(signal.wiener(row, 5), index=time_span), axis=1)
         # fix the NaN rows and substitute them with 0
         w_filt = w_filt.fillna(0)
-
-        growth_rates = w_filt.apply(lambda row: pd.Series(ip.UnivariateSpline(time_h, row, s=0).derivative(1)(time_h), index=time_span),
+        growth_rates = w_filt.apply(lambda row: pd.Series(UnivariateSpline(time_h, row, s=0).derivative(1)(time_h), index=time_span),
                         axis=1)
 
         max_slope = growth_rates.apply(lambda row: pd.Series(row.rolling(window).mean().max(), index=time_span), axis=1).iloc[:,0]

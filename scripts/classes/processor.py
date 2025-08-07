@@ -2,6 +2,8 @@ import numpy as np
 import pandas as pd
 from scipy import signal
 from itertools import product
+import os
+from scipy.interpolate import UnivariateSpline
 
 
 class DataProcessor:
@@ -210,7 +212,7 @@ class DataProcessor:
         # fix the NaN rows and substitute them with 0
         w_filt = w_filt.fillna(0)
 
-        growth_rates = w_filt.apply(lambda row: pd.Series(ip.UnivariateSpline(time_h, row, s=0).derivative(1)(time_h), index=time_span),
+        growth_rates = w_filt.apply(lambda row: pd.Series(UnivariateSpline(time_h, row, s=0).derivative(1)(time_h), index=time_span),
                         axis=1)
 
         # get the timeseries
