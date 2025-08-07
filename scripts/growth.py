@@ -32,6 +32,45 @@ from multiprocessing import get_context
 from tqdm import tqdm
 import pandas as pd
 
+<<<<<<< HEAD
+=======
+from scipy import interpolate as ip
+
+# start parser
+parser = argparse.ArgumentParser()
+
+# define arguments to pass to the script
+# here comes one difference, I'll read a path instead of a Design file
+parser.add_argument('-i',
+                    '--input',
+                    type=lambda p: pathlib.Path(p).absolute(),
+                    help='Input path where the design file is located (in .xlsx format)',
+                    required=True)
+parser.add_argument('-f',
+                    '--file',
+                    default='Design.xlsx',
+                    help='Name of the input file. "Design.xlsx" by default.')
+parser.add_argument('-o',
+                    '--output',
+                    default='Output',
+                    help='Output folder to save the analysis')
+parser.add_argument('-t',
+                    '--threads',
+                    default=1,
+                    help='Number of threads to use. 1 by default.')
+# add an argument to specify if you are using windows, optional
+parser.add_argument('-w',
+                    '--windows',
+                    action='store_true',
+                    help='Flag to indicate that you are using Windows.')
+parser.add_argument('-v',
+                    '--version',
+                    action='version',
+                    version=f'%(prog)s v.{__version__} {__status__}')
+
+
+args = parser.parse_args()
+>>>>>>> parent of 6e14453 (Merge pull request #1 from dmartimarti/feature/parametric-growth-models)
 
 # class of colors to print in the terminal
 class bcolors:
@@ -220,6 +259,7 @@ def main():
     # save the timeseries file in the output folder as a csv file
     out_time_df.to_csv(os.path.join(ROOT, OUTPUT, 'Timeseries.csv'), index=False)
 
+<<<<<<< HEAD
     # PARAMETRIC MODELLING
     if args.parametric:
         print(f'\n{bcolors.OKCYAN}Starting the parametric modelling...{bcolors.ENDC}\n')
@@ -289,6 +329,8 @@ def main():
         # plot the results
         plotter.plot_pca(pca_df, args.pca_color, explained_variance, pca_path)
 
+=======
+>>>>>>> parent of 6e14453 (Merge pull request #1 from dmartimarti/feature/parametric-growth-models)
 
     ### PLOT THE TIMESERIES
     data_types = out_time_df.Data.unique()
