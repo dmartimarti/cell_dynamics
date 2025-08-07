@@ -6,6 +6,8 @@ from itertools import product
 import os
 import pandas as pd
 from scipy.optimize import curve_fit
+import warnings
+from scipy.optimize import OptimizeWarning
 
 
 class GrowthAnalyzer:
@@ -193,11 +195,15 @@ class GrowthAnalyzer:
         return A * np.exp(-np.exp(mu * np.exp(1) / A * (t_lag - t) + 1))
 
     def fit_gompertz(self, t, y):
-        try:
-            params, _ = curve_fit(self.gompertz_model, t, y, p0=[max(y), 0.1, 1], maxfev=10000)
-            return params
-        except RuntimeError:
-            return [np.nan, np.nan, np.nan]
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
+            warnings.simplefilter("ignore", OptimizeWarning)
+            with np.errstate(over='ignore', divide='ignore', invalid='ignore'):
+                try:
+                    params, _ = curve_fit(self.gompertz_model, t, y, p0=[max(y), 0.1, 1], maxfev=10000)
+                    return params
+                except RuntimeError:
+                    return [np.nan, np.nan, np.nan]
 
     def calculate_auc(self, file, mode):
         """
