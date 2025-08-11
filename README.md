@@ -142,7 +142,12 @@ Plots produced in `<output>/Plots/`:
 
 This script also fits a Gompertz growth model to each well’s baseline-adjusted and Wiener-smoothed OD time series to extract growth parameters.
 
-- Model form: $$ y(t) = A \cdot \exp\left(-\exp\left(\frac{\mu e}{A} \cdot (t_{\mathrm{lag}} - t) + 1\right)\right) $$
+- Model form: 
+
+```math
+y(t) = A \cdot \exp\left(-\exp\left(\frac{\mu e}{A} \cdot (t_{\mathrm{lag}} - t) + 1\right)\right)
+```
+
 - Inputs: t is time in hours; the response is the smoothed, non-negative OD signal after subtracting the early-window mean and clipping at 0.
 - Parameters returned per well (added to `Summary.csv`):
 	- A: asymptotic maximum OD (carrying capacity).
