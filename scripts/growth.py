@@ -317,14 +317,19 @@ def main():
         analysis_vars = pd.read_excel(os.path.join(ROOT, 'Design.xlsx'), 'analysis')
         
         analysis_vars = AnalysisVars(analysis_vars)
-        grp_var = analysis_vars.grouping_variable
-        condition = analysis_vars.condition
+        grp_var = analysis_vars.grouping_variable  # this is a list (can contain multiple grouping vars)
+        condition = analysis_vars.condition        # this is a single string
 
-        # check that grp_var and condition are columns in the out_auc_df
-        if grp_var in out_auc_df.columns and condition in out_auc_df.columns:
-            pass
-        else:
-            print(f'{bcolors.FAIL}The grouping variable and/or the condition are not in the dataset. Please check the design file.{bcolors.ENDC}')
+        # Validate that all grouping variables and the condition exist in the dataframe
+        missing_grp = [g for g in grp_var if g not in out_auc_df.columns]
+        missing_cond = [] if condition in out_auc_df.columns else [condition]
+        if missing_grp or missing_cond:
+            msg_parts = []
+            if missing_grp:
+                msg_parts.append(f"missing grouping vars: {missing_grp}")
+            if missing_cond:
+                msg_parts.append(f"missing condition: {missing_cond[0]}")
+            print(f"{bcolors.FAIL}The analysis columns are not present in the dataset ({'; '.join(msg_parts)}). Please check the design file.{bcolors.ENDC}")
             sys.exit()
 
         # create a folder within Plots named "Boxplots"
@@ -336,22 +341,19 @@ def main():
 
         # clean the dataset
         out_auc_df_boxplot = out_auc_df.copy()
-        out_auc_df_boxplot.dropna(subset=[grp_var, condition], inplace=True)
-        # Vars to plot
-        temp_vars = out_auc_df_boxplot[grp_var].unique()
+        out_auc_df_boxplot.dropna(subset=grp_var + [condition], inplace=True)
         # plot the y val as the f_AUC column
         y_var = [col for col in out_auc_df_boxplot.columns if col.endswith('f_AUC')][0]
 
-        # store the inputs for the boxplot function in a zip object
-        inputs = zip([out_auc_df_boxplot]*len(temp_vars),
-                        [grp_var]*len(temp_vars),
-                        temp_vars,
-                        [condition]*len(temp_vars),
-                        [y_var]*len(temp_vars),
-                        [os.path.join(ROOT, OUTPUT, 'Plots', 'Boxplots')+'/']*len(temp_vars))
+        # Build inputs per grouping variable and its distinct values
+        inputs = []
+        for g in grp_var:
+            temp_vals = out_auc_df_boxplot[g].dropna().unique().tolist()
+            for tv in temp_vals:
+                inputs.append((out_auc_df_boxplot, g, tv, condition, y_var, os.path.join(ROOT, OUTPUT, 'Plots', 'Boxplots') + '/'))
 
         with get_context(start_method).Pool(n_threads) as p:
-            p.starmap(plot_boxplots, tqdm(inputs, total=len(temp_vars)))
+            p.starmap(plot_boxplots, tqdm(inputs, total=len(inputs)))
 
         
     # to test: python growth.py -i ./test_data/ -t 6

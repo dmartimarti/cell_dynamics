@@ -100,7 +100,8 @@ Any other sheet in the input file will be ignored.
 
 If you want to include information about the plate pattern, `Design.xlsx` must have a column named `Pattern`, where it indicates the name of the Pattern file or files that it will read and parse. This pattern file can have as many sheets as you want, with a shape of a 96-well plate. If you don't want a specific column to be read by the script, you can name it starting with an underscore, e.g., `_Variable`.
 
-**New function**, now is possible to include a sheet named `analysis` in the Design.xlsx file. This sheet will be used to specify **two variables**: a *grouping variable* and a *condition*. The grouping variable will be used to group the data, and the condition will be used as a x-axis variable for the boxplot. The script will look for the following columns: `grouping_variable` and `condition`. Below the column names you must specify the name of the column in the `Design` sheet that you want to use as grouping variable and condition. The variables to be used can be variables used in the Design file and/or in the Pattern files. 
+## Analysis
+**New function**, now is possible to include a sheet named `analysis` in the Design.xlsx file. This sheet will be used to specify **two variables**: a *grouping variable* and a *condition*. The grouping variable will be used to group the data, and the condition will be used as a x-axis variable for the boxplot. The script will look for the following columns: `grouping_variable` and `condition`. Below the column names you must specify the name of the column in the `Design` sheet that you want to use as grouping variable and condition. The variables to be used can be variables used in the Design file and/or in the Pattern files.
 
 For example, imagine you are analysing different strains with 0 and 50 mM of metformin. You can include as a grouping variable `strain`, and as a condition `metformin`. The script will group the data by strain and plot the boxplot for each strain, with the metformin as the x-axis variable.
 
@@ -108,14 +109,53 @@ For example, imagine you are analysing different strains with 0 and 50 mM of met
 
 ## Output
 
-The script will create a folder named as the specified output, and within it will create a folder named `Plots`. It will save two .csv files in the output folder, one with the AUCs and another with the timeseries. Then it will save all the plots within the `Plots` folder.
+Folders created inside the specified output directory:
+- <output>/: contains CSV files.
+- <output>/Plots/: contains per-plate timeseries and rate plots.
+- <output>/Plots/Boxplots/: created only when an `analysis` sheet is present in Design.xlsx; contains per-level boxplots.
 
-It will output 3 types of plots:
-- A timeseries plot with raw values that will be named just as the input file name and the wave length, e.g., *plate_1_595nm.pdf*
-- A timeseries plot a Wiener smoothing filter applied, named as the input file name and the wave length + '_f', e.g., *plate_1_595nm_f.pdf*
-- A plot of the growth rates per time, named as the input file name and the wave length + '_dt', e.g., *plate_1_595nm_dt.pdf*
+CSV files written:
+- Summary.csv (one row per well)
+	- Keys: `File`, `Well`.
+	- Metadata: all columns merged from Design.xlsx (`Design` sheet) and from Pattern files when a `Pattern` column is present.
+	- AUC metrics:
+		- `<OD>_f_AUC`: area under the Wiener-smoothed, baseline-adjusted curve (time in hours).
+		- `<OD>_f_logAUC`: log2 of the smoothed AUC.
+		- `<OD>_dt_Max`: maximum of the smoothed first derivative (proxy for max growth rate).
+	- Model parameters (see section below): `A`, `mu`, `t_lag`.
 
-The same variables can be found in the AUCs and timeseries .csv files as column names. 
+- Timeseries.csv (wide format)
+	- Columns: `File`, `Data`, `Well`, followed by numeric time columns (seconds).
+	- `Data` values indicate the signal:
+		- `'<OD>nm'`: baseline-adjusted signal.
+		- `'<OD>nm_f'`: Wiener-smoothed signal.
+		- `'<OD>nm_dt'`: first derivative of the smoothed signal.
+	- Note: plots convert time to hours; CSV keeps time columns in seconds.
+
+Plots produced in `<output>/Plots/`:
+- Per-plate, per-signal PDFs, e.g. `plate_1_595nm.pdf`, `plate_1_595nm_f.pdf`, `plate_1_595nm_dt.pdf`.
+- If `analysis` is provided, boxplots per level of the grouping variable are saved in `Plots/Boxplots/` and named by the level value.
+
+`<OD>` is taken from the file header (e.g., 595). The same variables are present as column names in the CSV files.
+
+## Gompertz growth model
+
+This script also fits a Gompertz growth model to each well’s baseline-adjusted and Wiener-smoothed OD time series to extract growth parameters.
+
+- Model form: $$ y(t) = A \cdot \exp\left(-\exp\left(\frac{\mu e}{A} \cdot (t_{\mathrm{lag}} - t) + 1\right)\right) $$
+- Inputs: t is time in hours; the response is the smoothed, non-negative OD signal after subtracting the early-window mean and clipping at 0.
+- Parameters returned per well (added to `Summary.csv`):
+	- A: asymptotic maximum OD (carrying capacity).
+	- mu: maximum growth rate (OD per hour under this parameterization).
+	- t_lag: lag time (hours) before exponential growth.
+
+Fitting details:
+- Nonlinear least squares via `scipy.optimize.curve_fit` with initial guess `[max(y), 0.1, 1]` and `maxfev=10000`.
+- On fitting failure, parameters are recorded as NaN.
+- Parameters are estimated on smoothed data to reduce noise; interpret A relative to the adjusted baseline.
+
+Where to find results:
+- `Summary.csv` includes columns `A`, `mu`, and `t_lag` alongside AUC metrics (e.g., `<OD>_f_AUC`, `<OD>_f_logAUC`) and the maximum smoothed derivative (`<OD>_dt_Max`).
 
 ## License
 
